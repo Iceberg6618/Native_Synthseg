@@ -17,7 +17,7 @@ provided, the SynthSeg model is loaded once and reused.
 The package uses the original SynthSeg source code placed under:
 
 ```text
-Native_Synthseg_Module/SynthSeg
+Native_Synthseg/SynthSeg
 ```
 
 ## Attribution
@@ -32,8 +32,8 @@ for single-image and batch NIfTI processing.
 Create a clean CPU-only conda environment:
 
 ```bash
-conda create -n Native_Synthseg_Module python=3.10 pip -y
-conda activate Native_Synthseg_Module
+conda create -n Native_Synthseg python=3.10 pip -y
+conda activate Native_Synthseg
 ```
 
 Install this package from the repository root:
@@ -69,9 +69,9 @@ protobuf 3.19.6
 The package expects the SynthSeg model and labels to be present at:
 
 ```text
-Native_Synthseg_Module/data/models/synthseg_2.0.h5
-Native_Synthseg_Module/data/labels_classes_priors/synthseg_segmentation_labels_2.0.npy
-Native_Synthseg_Module/SynthSeg/data/labels_classes_priors/*.npy
+Native_Synthseg/data/models/synthseg_2.0.h5
+Native_Synthseg/data/labels_classes_priors/synthseg_segmentation_labels_2.0.npy
+Native_Synthseg/SynthSeg/data/labels_classes_priors/*.npy
 ```
 
 ## Usage
@@ -79,7 +79,7 @@ Native_Synthseg_Module/SynthSeg/data/labels_classes_priors/*.npy
 Import the public API from the package root:
 
 ```python
-from Native_Synthseg_Module import run_native_synthseg
+from Native_Synthseg import run_native_synthseg
 ```
 
 ### 1. path2path
@@ -178,7 +178,7 @@ run_native_synthseg(
 You can also use the lower-level API directly:
 
 ```python
-from Native_Synthseg_Module import NativeSynthSegRunner, synthseg_single_nifti
+from Native_Synthseg import NativeSynthSegRunner, synthseg_single_nifti
 
 runner = NativeSynthSegRunner.get()
 synthseg_single_nifti(
