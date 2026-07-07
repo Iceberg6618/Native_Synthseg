@@ -79,7 +79,7 @@ Native_Synthseg/SynthSeg/data/labels_classes_priors/*.npy
 Import the public API from the package root:
 
 ```python
-from Native_Synthseg import run_native_synthseg
+from Native_Synthseg_Module import run_native_synthseg
 ```
 
 ### 1. path2path
@@ -178,7 +178,7 @@ run_native_synthseg(
 You can also use the lower-level API directly:
 
 ```python
-from Native_Synthseg import NativeSynthSegRunner, synthseg_single_nifti
+from Native_Synthseg_Module import NativeSynthSegRunner, synthseg_single_nifti
 
 runner = NativeSynthSegRunner.get()
 synthseg_single_nifti(
