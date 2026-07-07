@@ -1,0 +1,4 @@
+include README.md
+include requirements.txt
+recursive-include data *.h5 *.npy
+recursive-include SynthSeg *.py *.npy *.txt *.md
