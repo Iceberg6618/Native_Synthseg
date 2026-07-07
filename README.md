@@ -8,7 +8,7 @@ provided, the SynthSeg model is loaded once and reused.
 
 ## What This Package Does
 
-1. Loads a T2-weighted NIfTI image.
+1. Loads a NIfTI image.
 2. Runs SynthSeg in the preprocessing space used by the original SynthSeg code.
 3. Converts the SynthSeg segmentation into a NIfTI image.
 4. Registers the SynthSeg label map back to the input image's native space.
