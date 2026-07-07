@@ -39,7 +39,7 @@ conda activate Native_Synthseg_Module
 Install this package from the repository root:
 
 ```bash
-cd Native_Synthseg_Module
+cd Native_Synthseg
 pip install -e .
 ```
 
