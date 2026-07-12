@@ -225,6 +225,69 @@ class NativeSynthSegRunner:
 
         return native_seg
 
+    def run_t1_to_target_native(
+        self,
+        target_image: str | nib.Nifti1Image,
+        t1_image: str | nib.Nifti1Image,
+        output_path: str | None = None,
+        transform_path: str | None = None,
+        overwrite: bool = False,
+        transform_type: str = "Affine",
+    ) -> nib.Nifti1Image:
+        """Run SynthSeg on T1 and register the T1-native labels to target space."""
+        if output_path is not None and os.path.exists(output_path) and not overwrite:
+            return nib.load(output_path)
+
+        target_path = os.fspath(target_image) if isinstance(target_image, (str, os.PathLike)) else None
+        t1_path = os.fspath(t1_image) if isinstance(t1_image, (str, os.PathLike)) else None
+
+        target_nib = nib.load(target_path) if target_path is not None else target_image
+        t1_nib = nib.load(t1_path) if t1_path is not None else t1_image
+        target_nib.header["qform_code"] = 1
+        t1_nib.header["qform_code"] = 1
+
+        t1_seg = self.run_native(t1_image, output_path=None, overwrite=True)
+
+        fixed_target = _ants_image_from_nifti(target_nib)
+        moving_t1 = _ants_image_from_nifti(t1_nib)
+        moving_t1_seg = _ants_image_from_nifti(t1_seg)
+
+        registration = ants.registration(
+            fixed=fixed_target,
+            moving=moving_t1,
+            type_of_transform=transform_type,
+            verbose=False,
+        )
+        forward_transforms = registration["fwdtransforms"]
+
+        if transform_path is not None:
+            os.makedirs(os.path.dirname(os.path.abspath(transform_path)), exist_ok=True)
+            affine_transform = next(
+                (path for path in forward_transforms if str(path).endswith("GenericAffine.mat")),
+                forward_transforms[0],
+            )
+            if os.path.abspath(os.fspath(affine_transform)) != os.path.abspath(transform_path):
+                import shutil
+
+                shutil.copy2(affine_transform, transform_path)
+            forward_transforms = [transform_path if path == affine_transform else path for path in forward_transforms]
+
+        target_seg_ants = ants.apply_transforms(
+            fixed=fixed_target,
+            moving=moving_t1_seg,
+            transformlist=forward_transforms,
+            interpolator="genericLabel",
+        )
+
+        target_seg = _nifti_from_ants_image(target_seg_ants)
+        target_seg.header["qform_code"] = 1
+
+        if output_path is not None:
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            nib.save(target_seg, output_path)
+
+        return target_seg
+
     def _predict_isotropic(self, image_path: str) -> tuple[nib.Nifti1Image, nib.Nifti1Image | None]:
         device_context = _temporary_cuda_setting("-1") if self.config.force_cpu else nullcontext()
         resample_file = tempfile.NamedTemporaryFile(suffix=".nii.gz", delete=False)
@@ -324,12 +387,28 @@ def synthseg_single_nifti(
     input_path: str,
     output_path: str | None = None,
     *,
+    t1_path: str | None = None,
+    transform_path: str | None = None,
+    transform_type: str = "Affine",
     config: NativeSynthSegConfig | None = None,
     runner: NativeSynthSegRunner | None = None,
     overwrite: bool = False,
 ) -> nib.Nifti1Image:
-    """Run SynthSeg for a single NIfTI and register the result to native space."""
+    """Run SynthSeg for a single NIfTI and register the result to native space.
+
+    If ``t1_path`` is provided, SynthSeg is run on the T1 image first and the
+    T1-native label map is registered to ``input_path`` space.
+    """
     active_runner = runner or NativeSynthSegRunner.get(config)
+    if t1_path is not None:
+        return active_runner.run_t1_to_target_native(
+            target_image=input_path,
+            t1_image=t1_path,
+            output_path=output_path,
+            transform_path=transform_path,
+            overwrite=overwrite,
+            transform_type=transform_type,
+        )
     return active_runner.run_native(input_path, output_path=output_path, overwrite=overwrite)
 
 
@@ -337,6 +416,9 @@ def synthseg_multi_nifti(
     input_paths: Iterable[str],
     output_paths: Iterable[str],
     *,
+    t1_paths: Iterable[str | None] | None = None,
+    transform_paths: Iterable[str | None] | None = None,
+    transform_type: str = "Affine",
     config: NativeSynthSegConfig | None = None,
     overwrite: bool = False,
 ) -> list[str]:
@@ -351,8 +433,35 @@ def synthseg_multi_nifti(
         )
 
     runner = NativeSynthSegRunner.get(config)
+    t1_path_list = list(t1_paths) if t1_paths is not None else [None] * len(input_path_list)
+    transform_path_list = (
+        list(transform_paths) if transform_paths is not None else [None] * len(input_path_list)
+    )
 
-    for input_path, output_path in zip(input_path_list, output_path_list):
-        runner.run_native(input_path, output_path=output_path, overwrite=overwrite)
+    if len(t1_path_list) != len(input_path_list):
+        raise ValueError(
+            f"t1_paths and input_paths must have the same length "
+            f"({len(t1_path_list)} != {len(input_path_list)})."
+        )
+    if len(transform_path_list) != len(input_path_list):
+        raise ValueError(
+            f"transform_paths and input_paths must have the same length "
+            f"({len(transform_path_list)} != {len(input_path_list)})."
+        )
+
+    for input_path, output_path, t1_path, transform_path in zip(
+        input_path_list, output_path_list, t1_path_list, transform_path_list
+    ):
+        if t1_path is None:
+            runner.run_native(input_path, output_path=output_path, overwrite=overwrite)
+        else:
+            runner.run_t1_to_target_native(
+                target_image=input_path,
+                t1_image=t1_path,
+                output_path=output_path,
+                transform_path=transform_path,
+                overwrite=overwrite,
+                transform_type=transform_type,
+            )
 
     return output_path_list
